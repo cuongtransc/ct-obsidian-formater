@@ -57,15 +57,20 @@ try {
 		vaults.forEach((v, i) => console.log(`  ${i + 1}) ${v}`));
 		console.log(`  a) all of the above`);
 		console.log(`  n) enter a new vault path`);
+		console.log(`  q) cancel`);
 		console.log("");
 	}
 
 	const promptText = vaults.length > 0
-		? "Choose vault [1]: "
-		: "Obsidian vault path: ";
+		? "Choose vault [a]: "
+		: "Obsidian vault path (q to cancel): ";
 
 	let answer = (await rl.question(promptText)).trim();
-	if (answer === "" && vaults.length > 0) answer = "1";
+	if (answer === "" && vaults.length > 0) answer = "a";
+	if (answer === "q" || answer === "Q") {
+		console.log("Cancelled.");
+		process.exit(0);
+	}
 
 	let targets = [];
 
