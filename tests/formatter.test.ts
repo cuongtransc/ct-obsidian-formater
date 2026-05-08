@@ -1,12 +1,15 @@
 import { strict as assert } from 'node:assert';
 import { describe, test } from 'node:test';
 import {
+	addImageWikilinkSize,
 	canonicalLanguage,
 	collapseBlankLines,
 	ensureTrailingNewline,
+	findImageWikilinks,
 	format,
 	formatPaste,
 	normalizeLineEndings,
+	pastedSlice,
 	rewriteGeminiCodeFences,
 	trimTrailingWhitespace,
 } from '../src/formatter';
@@ -283,6 +286,120 @@ describe('format pipeline', () => {
 
 	test('empty input survives', () => {
 		assert.equal(format(''), '\n');
+	});
+});
+
+describe('addImageWikilinkSize', () => {
+	test('appends size to a bare image wikilink', () => {
+		assert.equal(
+			addImageWikilinkSize('![[Pasted image 20260508104252.png]]', 1000),
+			'![[Pasted image 20260508104252.png|1000]]'
+		);
+	});
+
+	test('leaves wikilinks that already have a size alone', () => {
+		const input = '![[image.png|500]]';
+		assert.equal(addImageWikilinkSize(input, 1000), input);
+	});
+
+	test('handles multiple links in one document', () => {
+		const input = '![[a.png]]\nsome text\n![[b.jpg]]';
+		const expected = '![[a.png|1000]]\nsome text\n![[b.jpg|1000]]';
+		assert.equal(addImageWikilinkSize(input, 1000), expected);
+	});
+
+	test('only matches recognized image extensions', () => {
+		const input = '![[note.md]]\n![[doc.pdf]]\n![[img.png]]';
+		const expected = '![[note.md]]\n![[doc.pdf]]\n![[img.png|1000]]';
+		assert.equal(addImageWikilinkSize(input, 1000), expected);
+	});
+
+	test('matches uppercase extensions', () => {
+		assert.equal(addImageWikilinkSize('![[A.PNG]]', 1000), '![[A.PNG|1000]]');
+	});
+
+	test('does not modify regular wikilinks without leading !', () => {
+		const input = '[[image.png]]';
+		assert.equal(addImageWikilinkSize(input, 1000), input);
+	});
+
+	test('handles subpath embeds', () => {
+		assert.equal(
+			addImageWikilinkSize('![[attachments/diagram.svg]]', 1000),
+			'![[attachments/diagram.svg|1000]]'
+		);
+	});
+
+	test('returns input unchanged for non-positive or non-finite sizes', () => {
+		const input = '![[image.png]]';
+		assert.equal(addImageWikilinkSize(input, 0), input);
+		assert.equal(addImageWikilinkSize(input, -10), input);
+		assert.equal(addImageWikilinkSize(input, NaN), input);
+	});
+});
+
+describe('findImageWikilinks', () => {
+	test('locates positions across lines and reports hasSize correctly', () => {
+		const text = 'hello\nstart ![[a.png]] end\n![[b.png|500]]';
+		const matches = findImageWikilinks(text);
+		assert.equal(matches.length, 2);
+		assert.deepEqual(matches[0], {
+			line: 1,
+			startCh: 6,
+			endCh: 6 + '![[a.png]]'.length,
+			name: 'a.png',
+			hasSize: false,
+		});
+		assert.deepEqual(matches[1], {
+			line: 2,
+			startCh: 0,
+			endCh: '![[b.png|500]]'.length,
+			name: 'b.png',
+			hasSize: true,
+		});
+	});
+
+	test('returns an empty array when there are no image wikilinks', () => {
+		assert.deepEqual(findImageWikilinks('just some text\n[[a regular note]]'), []);
+	});
+
+	test('insert position endCh-2 lands right before the closing ]]', () => {
+		const text = '![[Pasted image 20260508104252.png]]';
+		const [m] = findImageWikilinks(text);
+		assert.equal(text.slice(m.endCh - 2, m.endCh), ']]');
+		const patched = text.slice(0, m.endCh - 2) + '|1000' + text.slice(m.endCh - 2);
+		assert.equal(patched, '![[Pasted image 20260508104252.png|1000]]');
+	});
+});
+
+describe('pastedSlice', () => {
+	test('returns the inserted text and end offset for an insertion at a point', () => {
+		const before = 'abXYef';
+		const after = 'abHELLOXYef';
+		const result = pastedSlice(before, after, 2, 2);
+		assert.deepEqual(result, { inserted: 'HELLO', endOffset: 7 });
+	});
+
+	test('handles a paste that replaces a non-empty selection', () => {
+		const before = 'abcdef';
+		const after = 'aXef';
+		const result = pastedSlice(before, after, 1, 4);
+		assert.deepEqual(result, { inserted: 'X', endOffset: 2 });
+	});
+
+	test('handles multi-line paste', () => {
+		const before = 'hello\nworld';
+		const after = 'hello\nFOO\nworld';
+		const result = pastedSlice(before, after, 6, 6);
+		assert.deepEqual(result, { inserted: 'FOO\n', endOffset: 10 });
+	});
+
+	test('returns null when nothing was inserted (empty paste over empty selection)', () => {
+		assert.equal(pastedSlice('abc', 'abc', 1, 1), null);
+	});
+
+	test('returns null when content shrank (e.g. paste replaced selection with empty)', () => {
+		assert.equal(pastedSlice('abcdef', 'ac', 1, 4), null);
 	});
 });
 

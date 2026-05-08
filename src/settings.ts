@@ -64,5 +64,31 @@ export class FormatterSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				})
 			);
+
+		new Setting(containerEl)
+			.setName('Set image size on paste')
+			.setDesc('When pasting an image, append a default width to the wikilink (e.g. ![[Pasted image 20260508104252.png|1000]]).')
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.setImageSizeOnPaste).onChange(async (value) => {
+					this.plugin.settings.setImageSizeOnPaste = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName('Pasted image width')
+			.setDesc('Pixel width applied after the | in the wikilink. Must be a positive integer.')
+			.addText((text) =>
+				text
+					.setPlaceholder('1000')
+					.setValue(String(this.plugin.settings.pastedImageSize))
+					.onChange(async (value) => {
+						const parsed = parseInt(value, 10);
+						if (Number.isFinite(parsed) && parsed > 0) {
+							this.plugin.settings.pastedImageSize = parsed;
+							await this.plugin.saveSettings();
+						}
+					})
+			);
 	}
 }

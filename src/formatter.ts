@@ -230,6 +230,87 @@ export function normalizeLineEndings(input: string): string {
 	return input.replace(/\r\n?/g, '\n');
 }
 
+const IMAGE_EXT = '(?:png|jpe?g|gif|webp|svg|bmp|avif|tiff?|heic|ico)';
+
+function imageWikilinkRegex(): RegExp {
+	// Captures: 1 = name (incl. any path/anchor), 2 = optional `|...` size suffix.
+	return new RegExp(
+		`!\\[\\[([^\\]\\n|]+\\.${IMAGE_EXT})(\\|[^\\]\\n]*)?\\]\\]`,
+		'gi'
+	);
+}
+
+export interface ImageWikilinkMatch {
+	line: number;
+	startCh: number;
+	endCh: number;
+	name: string;
+	hasSize: boolean;
+}
+
+/**
+ * Locates Obsidian image wikilinks in `text` and reports their positions
+ * as `{line, ch}` ranges. Used by the paste hook to splice `|size` into a
+ * freshly-inserted link via `editor.replaceRange()` without rewriting the
+ * whole document.
+ */
+export function findImageWikilinks(text: string): ImageWikilinkMatch[] {
+	const re = imageWikilinkRegex();
+	const out: ImageWikilinkMatch[] = [];
+	const lines = text.split('\n');
+	for (let line = 0; line < lines.length; line++) {
+		const lineText = lines[line];
+		for (const m of lineText.matchAll(re)) {
+			const matchIndex = m.index ?? 0;
+			out.push({
+				line,
+				startCh: matchIndex,
+				endCh: matchIndex + m[0].length,
+				name: m[1],
+				hasSize: m[2] !== undefined,
+			});
+		}
+	}
+	return out;
+}
+
+/**
+ * Appends `|<size>` to every Obsidian image wikilink that doesn't already
+ * specify a size. Used as a batch transform; the paste hook does the same
+ * thing positionally for cursor preservation. Non-positive or non-finite
+ * sizes return the input unchanged.
+ */
+export function addImageWikilinkSize(input: string, size: number): string {
+	if (!Number.isFinite(size) || size <= 0) return input;
+	const re = imageWikilinkRegex();
+	return input.replace(re, (match, name, sizePart) => {
+		if (sizePart) return match;
+		return `![[${name}|${size}]]`;
+	});
+}
+
+/**
+ * Given the editor content before and after a paste, plus the pre-paste
+ * selection range as offsets, returns the inserted substring and the
+ * offset where it ends in `after`. Returns `null` if nothing appears to
+ * have been inserted.
+ *
+ * Used to find the region Obsidian just wrote so we can re-format it
+ * after its HTML→Markdown conversion (which is what produces the Gemini
+ * bug pattern in the first place — we can't catch it via `text/plain`).
+ */
+export function pastedSlice(
+	before: string,
+	after: string,
+	fromOffset: number,
+	toOffset: number
+): { inserted: string; endOffset: number } | null {
+	const insertedLen = after.length - before.length + (toOffset - fromOffset);
+	if (insertedLen <= 0) return null;
+	const inserted = after.slice(fromOffset, fromOffset + insertedLen);
+	return { inserted, endOffset: fromOffset + insertedLen };
+}
+
 /**
  * Runs the full formatting pipeline. Each step is gated by `options`.
  * Always normalizes line endings first.
