@@ -1,0 +1,73 @@
+min_version = "2026.2.18"
+
+[tools]
+node = "24"
+
+[env]
+_.path = ['{{config_root}}/node_modules/.bin']
+NODE_ENV = "{{ env.NODE_ENV | default(value='development') }}"
+
+# ─── Setup ────────────────────────────────────────────────────────
+[tasks.install]
+alias = "i"
+description = "Install dependencies"
+sources = ["package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+run = "npm install"
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf dist node_modules"
+
+# ─── Build ────────────────────────────────────────────────────────
+[tasks.dev]
+alias = "d"
+description = "Start dev build with file watcher"
+depends = ["install"]
+run = "node scripts/esbuild.config.mjs"
+
+[tasks.build]
+alias = "b"
+description = "Production build"
+depends = ["install"]
+sources = ["src/**/*.ts", "src/styles.css", "tsconfig.json", "scripts/esbuild.config.mjs"]
+outputs = ["dist/main.js"]
+run = "tsc -noEmit -skipLibCheck && node scripts/esbuild.config.mjs production"
+
+# ─── Quality ──────────────────────────────────────────────────────
+[tasks.typecheck]
+alias = "tc"
+description = "TypeScript type check"
+depends = ["install"]
+run = "tsc -noEmit -skipLibCheck"
+
+[tasks.lint]
+alias = "l"
+description = "Type-check + ESLint over src/ and tests/"
+depends = ["install"]
+run = """
+tsc -noEmit -skipLibCheck
+eslint src tests
+"""
+
+[tasks.test]
+alias = "t"
+description = "Run formatter unit tests"
+depends = ["install"]
+run = "tsx --test tests/formatter.test.ts"
+
+[tasks.ci]
+description = "Lint + test (use this in CI pipelines)"
+depends = ["lint", "test"]
+run = "echo 'CI checks passed.'"
+
+# ─── Release ──────────────────────────────────────────────────────
+[tasks.version]
+description = "Bump version in manifest and versions files"
+run = "node scripts/version-bump.mjs && git add manifest.json versions.json"
+
+[tasks.deploy]
+description = "Deploy build to a local Obsidian vault (prompts for path)"
+depends = ["build"]
+run = "node scripts/deploy.mjs"
+raw = true

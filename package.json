@@ -1,0 +1,34 @@
+{
+	"name": "ct-obsidian-formater",
+	"version": "0.1.0",
+	"description": "Reformats notes pasted from Gemini and other AI assistants into clean Obsidian-flavored Markdown.",
+	"main": "dist/main.js",
+	"scripts": {
+		"dev": "node scripts/esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node scripts/esbuild.config.mjs production",
+		"version": "node scripts/version-bump.mjs && git add manifest.json versions.json",
+		"test": "node --test --import tsx tests/**/*.test.ts",
+		"typecheck": "tsc -noEmit -skipLibCheck"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"markdown",
+		"formatter",
+		"gemini"
+	],
+	"author": "Cuong Tran",
+	"license": "MIT",
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^20.11.0",
+		"builtin-modules": "3.3.0",
+		"esbuild": "^0.28.0",
+		"eslint": "^10.3.0",
+		"obsidian": "latest",
+		"tslib": "2.4.0",
+		"tsx": "^4.7.0",
+		"typescript": "5.4.5",
+		"typescript-eslint": "^8.59.2"
+	}
+}
